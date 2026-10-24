@@ -1,0 +1,11 @@
+# Runtime. Lower bounds only: after the first green test run, freeze exact versions
+# (pip freeze > requirements.lock) and record them in CHANGELOG.md.
+# markitdown extras are deliberate (SPEC-001 D-1): no [all], no audio/outlook/az-doc-intel.
+# Verified in sandbox with markitdown 0.1.5 on Python 3.12.
+markitdown[pdf,docx,pptx,xlsx,xls,youtube-transcription]>=0.1.5,<0.2
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+httpx>=0.27
+pydantic-settings>=2.4
+slowapi>=0.1.9

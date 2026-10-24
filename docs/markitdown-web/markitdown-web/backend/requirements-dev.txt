@@ -1,0 +1,12 @@
+-r requirements.txt
+pytest>=8
+pytest-asyncio>=0.23
+respx>=0.21          # mock httpx for URL tests (network is not available/reliable in tests)
+ruff>=0.5
+# Only for scripts/make_fixtures.py
+python-docx
+python-pptx
+openpyxl
+xlwt
+reportlab
+ebooklib

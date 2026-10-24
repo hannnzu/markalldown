@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+*.env.local
+requirements.lock
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# Ruff
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fixtures (dibuat oleh make_fixtures.py — commit ke repo)
+# Jangan exclude tests/fixtures/
