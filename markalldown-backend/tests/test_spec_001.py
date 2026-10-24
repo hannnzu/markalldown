@@ -321,27 +321,116 @@ class TestPhase4Batch:
 
     def test_ac4_batch_dengan_campuran_sukses_dan_gagal(self):
         """AC-4: Batch campuran [FR-2, FR-6]"""
-        raise NotImplementedError("AC-4 — Phase 4")
+        client = make_client()
+        with open(FIXTURES / "sample.pdf", "rb") as f1, \
+             open(FIXTURES / "sample.pptx", "rb") as f2, \
+             open(FIXTURES / "fake.pdf", "rb") as f3:
+            files = [
+                ("files", ("doc1.pdf", f1, "application/pdf")),
+                ("files", ("doc2.pptx", f2, "application/vnd.openxmlformats-officedocument.presentationml.presentation")),
+                ("files", ("broken.pdf", f3, "application/pdf")),
+            ]
+            resp = client.post("/api/convert/files", files=files)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 3
+        assert body["success"] == 2
+        assert body["failed"] == 1
+
+        results = body["results"]
+        assert len(results) == 3
+        assert results[0]["filename"] == "doc1.pdf"
+        assert results[0]["status"] == "success"
+        assert results[0]["markdown"] is not None
+
+        assert results[1]["filename"] == "doc2.pptx"
+        assert results[1]["status"] == "success"
+        assert results[1]["markdown"] is not None
+
+        assert results[2]["filename"] == "broken.pdf"
+        assert results[2]["status"] == "error"
+        assert results[2]["markdown"] is None
+        assert results[2]["error"] == "INVALID_FILE_CONTENT"
 
     def test_ac31_batch_melebihi_total_ukuran(self):
         """AC-31: Batch > MAX_BATCH_SIZE_MB → 413 BATCH_TOO_LARGE"""
-        raise NotImplementedError("AC-31 — Phase 4")
+        from unittest.mock import patch
+
+        from app.config import AppConfig
+
+        client = make_client()
+        mock_cfg = AppConfig(MAX_FILE_SIZE_MB=1, MAX_BATCH_SIZE_MB=1)
+        # Dua file yang totalnya > 1MB
+        part = b"%PDF-" + b"x" * (600 * 1024)
+        files = [
+            ("files", ("f1.pdf", part, "application/pdf")),
+            ("files", ("f2.pdf", part, "application/pdf")),
+        ]
+        with patch("app.routers.convert.get_config", return_value=mock_cfg):
+            resp = client.post("/api/convert/files", files=files)
+
+        assert resp.status_code == 413
+        body = resp.json()
+        assert body["error"] == "BATCH_TOO_LARGE"
 
     def test_ec6_dua_file_dengan_nama_sama_dalam_satu_batch(self):
         """EC-6: Dua file nama sama → keduanya diproses"""
-        raise NotImplementedError("EC-6 — Phase 4")
+        client = make_client()
+        with open(FIXTURES / "sample.txt", "rb") as f1, \
+             open(FIXTURES / "sample.txt", "rb") as f2:
+            files = [
+                ("files", ("laporan.txt", f1, "text/plain")),
+                ("files", ("laporan.txt", f2, "text/plain")),
+            ]
+            resp = client.post("/api/convert/files", files=files)
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] == 2
+        assert body["success"] == 2
+        assert len(body["results"]) == 2
+        assert body["results"][0]["filename"] == "laporan.txt"
+        assert body["results"][1]["filename"] == "laporan.txt"
 
     def test_ec7_request_batch_tanpa_file(self):
         """EC-7: Batch kosong → 422 NO_FILES"""
-        raise NotImplementedError("EC-7 — Phase 4")
+        client = make_client()
+        resp = client.post("/api/convert/files", files=[])
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["error"] in ("NO_FILES", "INVALID_REQUEST")
 
     def test_ec8_batch_melebihi_20_file(self):
         """EC-8: > 20 file → 422 TOO_MANY_FILES"""
-        raise NotImplementedError("EC-8 — Phase 4")
+        client = make_client()
+        files = [
+            ("files", (f"file_{i}.txt", b"content", "text/plain"))
+            for i in range(21)
+        ]
+        resp = client.post("/api/convert/files", files=files)
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["error"] == "TOO_MANY_FILES"
 
     def test_ec17_total_ukuran_batch_max_batch_size_mb(self):
         """EC-17: Total > MAX_BATCH_SIZE_MB → 413 BATCH_TOO_LARGE"""
-        raise NotImplementedError("EC-17 — Phase 4")
+        from unittest.mock import patch
+
+        from app.config import AppConfig
+
+        client = make_client()
+        mock_cfg = AppConfig(MAX_FILE_SIZE_MB=1, MAX_BATCH_SIZE_MB=1)
+        part = b"%PDF-" + b"0" * (700 * 1024)
+        files = [
+            ("files", ("a.pdf", part, "application/pdf")),
+            ("files", ("b.pdf", part, "application/pdf")),
+        ]
+        with patch("app.routers.convert.get_config", return_value=mock_cfg):
+            resp = client.post("/api/convert/files", files=files)
+
+        assert resp.status_code == 413
+        assert resp.json()["error"] == "BATCH_TOO_LARGE"
 
 
 # ===========================================================================
