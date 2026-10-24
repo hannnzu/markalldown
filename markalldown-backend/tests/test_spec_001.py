@@ -235,27 +235,82 @@ class TestPhase3Hardening:
 
     def test_ac13_rate_limit(self):
         """AC-13: Rate limit [NFR-S2] — request ke-31 → 429 RATE_LIMITED"""
-        raise NotImplementedError("AC-13 — Phase 3")
+        from app.limiter import limiter
+
+        limiter.reset()
+        client = make_client()
+        file_path = FIXTURES / "sample.txt"
+
+        # Kirim 30 request yang berhasil
+        for _ in range(30):
+            with open(file_path, "rb") as f:
+                resp = client.post("/api/convert/file", files={"file": ("sample.txt", f, "text/plain")})
+            assert resp.status_code == 200
+
+        # Request ke-31 harus ditolak dengan 429 RATE_LIMITED
+        with open(file_path, "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("sample.txt", f, "text/plain")})
+        assert resp.status_code == 429
+        body = resp.json()
+        assert body["error"] == "RATE_LIMITED"
+        limiter.reset()
 
     def test_ac14_zip_bomb_ditolak(self):
         """AC-14: Zip bomb ditolak [NFR-S4] — 101 entri → 422 ARCHIVE_LIMIT_EXCEEDED"""
-        raise NotImplementedError("AC-14 — Phase 3")
+        client = make_client()
+        with open(FIXTURES / "too_many_entries.zip", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("too_many_entries.zip", f, "application/zip")})
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["error"] == "ARCHIVE_LIMIT_EXCEEDED"
 
     def test_ac15_timeout_konversi(self):
         """AC-15: Timeout konversi [NFR-R2] — > 60 dtk → 504 CONVERSION_TIMEOUT"""
-        raise NotImplementedError("AC-15 — Phase 3")
+        import time
+        from unittest.mock import patch
+
+        client = make_client()
+
+        def slow_convert(*args, **kwargs):
+            time.sleep(0.1)
+            return "too slow"
+
+        with patch("app.services.converter._TIMEOUT_SECONDS", 0.01), \
+             patch("app.services.converter._sync_convert_stream", side_effect=slow_convert):
+            with open(FIXTURES / "sample.pdf", "rb") as f:
+                resp = client.post("/api/convert/file", files={"file": ("sample.pdf", f, "application/pdf")})
+
+        assert resp.status_code == 504
+        body = resp.json()
+        assert body["error"] == "CONVERSION_TIMEOUT"
 
     def test_ac32_zip_berisi_file_di_luar_allowlist_ditolak(self):
         """AC-32: ZIP berisi .exe atau nested ZIP → 422 ARCHIVE_CONTENT_NOT_ALLOWED"""
-        raise NotImplementedError("AC-32 — Phase 3")
+        client = make_client()
+        with open(FIXTURES / "zip_with_exe.zip", "rb") as f:
+            resp1 = client.post("/api/convert/file", files={"file": ("zip_with_exe.zip", f, "application/zip")})
+        assert resp1.status_code == 422
+        assert resp1.json()["error"] == "ARCHIVE_CONTENT_NOT_ALLOWED"
+
+        with open(FIXTURES / "nested.zip", "rb") as f:
+            resp2 = client.post("/api/convert/file", files={"file": ("nested.zip", f, "application/zip")})
+        assert resp2.status_code == 422
+        assert resp2.json()["error"] == "ARCHIVE_CONTENT_NOT_ALLOWED"
 
     def test_ec14_pengguna_menutup_tab_saat_konversi_berjalan(self):
         """EC-14: Client disconnect → server tetap hapus temp file"""
-        raise NotImplementedError("EC-14 — Phase 3")
+        client = make_client()
+        with open(FIXTURES / "sample.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("sample.pdf", f, "application/pdf")})
+        assert resp.status_code == 200
 
     def test_ec18_zip_berisi_entri_di_luar_allowlist(self):
         """EC-18: ZIP nested / exe → ARCHIVE_CONTENT_NOT_ALLOWED"""
-        raise NotImplementedError("EC-18 — Phase 3")
+        client = make_client()
+        with open(FIXTURES / "zip_with_exe.zip", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("zip_with_exe.zip", f, "application/zip")})
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "ARCHIVE_CONTENT_NOT_ALLOWED"
 
 
 # ===========================================================================

@@ -13,21 +13,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.config import get_config
 from app.exceptions import AppError
+from app.limiter import limiter
 from app.models.schemas import ApiError
 from app.routers import convert, health
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Rate limiter — slowapi (in-memory default, Supabase override untuk multi-instance)
-# ---------------------------------------------------------------------------
-limiter = Limiter(key_func=get_remote_address)
 
 
 def create_app() -> FastAPI:

@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, File, Request, UploadFile
 
 from app.config import get_config
+from app.limiter import limiter
 from app.models.schemas import ConvertFileResponse
 from app.services.converter import convert_file_data
 from app.services.validators import read_and_validate_file_stream
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/convert", tags=["convert"])
 
 
 @router.post("/file", response_model=ConvertFileResponse)
+@limiter.limit("30/minute")
 async def convert_single_file(
     request: Request,
     file: UploadFile = File(...),

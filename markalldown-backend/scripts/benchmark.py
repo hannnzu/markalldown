@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import time
+
 import numpy as np
 from markitdown import MarkItDown, StreamInfo
 
