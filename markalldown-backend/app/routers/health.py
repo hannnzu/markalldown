@@ -3,6 +3,7 @@
 Endpoint sederhana; harus merespons < 200 ms (p95) tanpa dependensi eksternal.
 """
 from fastapi import APIRouter
+
 from app.config import get_config
 from app.models.schemas import HealthResponse
 

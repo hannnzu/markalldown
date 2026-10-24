@@ -8,19 +8,19 @@ Implements:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import get_config
+from app.exceptions import AppError
 from app.models.schemas import ApiError
-from app.routers import health
+from app.routers import convert, health
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,16 @@ def create_app() -> FastAPI:
             ).model_dump(),
         )
 
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ApiError(
+                error=exc.error,
+                message=exc.message,
+            ).model_dump(),
+        )
+
     @app.exception_handler(Exception)
     async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
         # Log internal; JANGAN bocorkan stack trace / path ke klien (AC-23)
@@ -100,7 +110,7 @@ def create_app() -> FastAPI:
     # Routers
     # -----------------------------------------------------------------------
     app.include_router(health.router, prefix="/api")
-    # Phase 2+: convert router ditambahkan di sini
+    app.include_router(convert.router, prefix="/api")
 
     return app
 

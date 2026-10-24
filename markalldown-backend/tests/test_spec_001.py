@@ -10,10 +10,8 @@ Perintah:
 """
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -84,64 +82,149 @@ class TestPhase2ConvertFile:
 
     def test_ac1_konversi_satu_file_berhasil(self):
         """AC-1: Konversi satu file berhasil [FR-1, FR-5]"""
-        raise NotImplementedError("AC-1 — Phase 2")
+        client = make_client()
+        file_path = FIXTURES / "sample.pdf"
+        with open(file_path, "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("document.pdf", f, "application/pdf")})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["filename"] == "document.pdf"
+        assert len(body["markdown"]) > 0
+        assert body["size_bytes"] == file_path.stat().st_size
+        assert "converted_at" in body
+        assert isinstance(body["warnings"], list)
 
     def test_ac2_ekstensi_tidak_didukung_ditolak(self):
         """AC-2: Ekstensi tidak didukung ditolak [FR-3]"""
-        raise NotImplementedError("AC-2 — Phase 2")
+        client = make_client()
+        file_path = FIXTURES / "malware.exe"
+        with open(file_path, "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("malware.exe", f, "application/octet-stream")})
+        assert resp.status_code == 415
+        body = resp.json()
+        assert body["error"] == "UNSUPPORTED_FILE_TYPE"
+        assert "message" in body
 
     def test_ac3_file_terlalu_besar_ditolak(self):
         """AC-3: File terlalu besar ditolak [FR-4]"""
-        raise NotImplementedError("AC-3 — Phase 2")
+        from unittest.mock import patch
+
+        from app.config import AppConfig
+
+        client = make_client()
+        mock_cfg = AppConfig(MAX_FILE_SIZE_MB=1)
+        big_content = b"%PDF-" + b"0" * (1024 * 1024 + 100)
+        with patch("app.routers.convert.get_config", return_value=mock_cfg):
+            resp = client.post(
+                "/api/convert/file",
+                files={"file": ("big.pdf", big_content, "application/pdf")},
+            )
+        assert resp.status_code == 413
+        body = resp.json()
+        assert body["error"] == "FILE_TOO_LARGE"
 
     def test_ac5_file_sementara_dibersihkan(self):
         """AC-5: File sementara dibersihkan [FR-7]"""
-        raise NotImplementedError("AC-5 — Phase 2")
+        client = make_client()
+        file_path = FIXTURES / "sample.txt"
+        with open(file_path, "rb") as f:
+            resp1 = client.post("/api/convert/file", files={"file": ("sample.txt", f, "text/plain")})
+        assert resp1.status_code == 200
+
+        fake_path = FIXTURES / "fake.pdf"
+        with open(fake_path, "rb") as f:
+            resp2 = client.post("/api/convert/file", files={"file": ("fake.pdf", f, "application/pdf")})
+        assert resp2.status_code == 422
 
     def test_ac6_format_inti_terkonversi(self):
         """AC-6: Format inti terkonversi [FR-5] — 14 format"""
-        raise NotImplementedError("AC-6 — Phase 2")
+        client = make_client()
+        formats = [
+            "sample.pdf", "sample.docx", "sample.pptx", "sample.xlsx", "sample.xls",
+            "sample.csv", "sample.html", "sample.htm", "sample.json", "sample.xml",
+            "sample.txt", "sample.md", "sample.epub", "sample.zip",
+        ]
+        for name in formats:
+            fp = FIXTURES / name
+            assert fp.exists(), f"Fixture {name} harus ada"
+            with open(fp, "rb") as f:
+                resp = client.post("/api/convert/file", files={"file": (name, f, "application/octet-stream")})
+            assert resp.status_code == 200, f"Gagal konversi {name}: {resp.text}"
+            body = resp.json()
+            assert len(body["markdown"]) > 0, f"Markdown kosong untuk {name}"
 
     def test_ac24_konversi_tidak_memakai_convert_dengan_input_pengguna(self):
         """AC-24: Konversi tidak memakai convert() dengan input pengguna [FR-8]
         Static check: tidak ada MarkItDown.convert( di converter.py
         """
         converter_path = Path(__file__).parent.parent / "app" / "services" / "converter.py"
-        if not converter_path.exists():
-            raise NotImplementedError("AC-24 — Phase 2: converter.py belum ada")
+        assert converter_path.exists(), "converter.py belum ada"
         source = converter_path.read_text(encoding="utf-8")
-        # Tidak boleh ada .convert( diikuti variabel dari user
-        assert "MarkItDown().convert(" not in source, (
-            "Jangan pakai MarkItDown().convert() langsung (FR-8)"
-        )
+        assert "MarkItDown().convert(" not in source, "Jangan pakai MarkItDown().convert() langsung (FR-8)"
+        assert "convert_stream(" in source
 
     def test_ac29_isi_file_tidak_cocok_dengan_ekstensi(self):
         """AC-29: Isi file tidak cocok dengan ekstensi [FR-26]"""
-        raise NotImplementedError("AC-29 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "fake.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("fake.pdf", f, "application/pdf")})
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "INVALID_FILE_CONTENT"
 
     def test_ec1_file_kosong_0_byte(self):
         """EC-1: File kosong (0 byte) → HTTP 422 EMPTY_FILE"""
-        raise NotImplementedError("EC-1 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "empty.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("empty.pdf", f, "application/pdf")})
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "EMPTY_FILE"
 
     def test_ec2_ekstensi_benar_tetapi_isi_bukan_format_tersebut(self):
         """EC-2: fake.pdf berisi teks biasa → INVALID_FILE_CONTENT"""
-        raise NotImplementedError("EC-2 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "fake.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("fake.pdf", f, "application/pdf")})
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "INVALID_FILE_CONTENT"
 
     def test_ec3_pdf_terenkripsi_berpassword(self):
         """EC-3: PDF terenkripsi → CONVERSION_FAILED"""
-        raise NotImplementedError("EC-3 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "encrypted.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("encrypted.pdf", f, "application/pdf")})
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "CONVERSION_FAILED"
 
     def test_ec4_pdf_hasil_scan_tanpa_lapisan_teks(self):
         """EC-4: PDF tanpa teks → 200 + warnings NO_TEXT_EXTRACTED"""
-        raise NotImplementedError("EC-4 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "no_text.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("no_text.pdf", f, "application/pdf")})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "NO_TEXT_EXTRACTED" in body.get("warnings", [])
+        assert body["markdown"] == ""
 
     def test_ec5_nama_file_mengandung_path_traversal(self):
         """EC-5: Path traversal di nama file → nama tersanitasi"""
-        raise NotImplementedError("EC-5 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "sample.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("../../etc/passwd.pdf", f, "application/pdf")})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "/" not in body["filename"]
+        assert ".." not in body["filename"]
+        assert body["filename"].endswith(".pdf")
 
     def test_ec19_file_berekstensi_huruf_besar_atau_campuran(self):
         """EC-19: REPORT.PDF → diperlakukan sama dengan .pdf"""
-        raise NotImplementedError("EC-19 — Phase 2")
+        client = make_client()
+        with open(FIXTURES / "sample.pdf", "rb") as f:
+            resp = client.post("/api/convert/file", files={"file": ("REPORT.PDF", f, "application/pdf")})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["filename"] == "REPORT.PDF"
+        assert len(body["markdown"]) > 0
 
 
 # ===========================================================================

@@ -21,8 +21,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import os
-import struct
 import zipfile
 from pathlib import Path
 
@@ -221,7 +219,6 @@ def make_xls():
 
 def make_epub():
     try:
-        import ebooklib
         from ebooklib import epub
         book = epub.EpubBook()
         book.set_identifier("markalldown-fixture")

@@ -7,8 +7,8 @@ Aturan (SPEC-001 EC-5):
 from __future__ import annotations
 
 import os
-import unicodedata
 import re
+import unicodedata
 
 
 def sanitize_filename(filename: str) -> str:

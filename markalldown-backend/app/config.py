@@ -6,7 +6,6 @@ ENVIRONMENT, ALLOWED_ORIGINS (tanpa *), dan SUPABASE_* via env Railway.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -50,7 +49,7 @@ class AppConfig(BaseSettings):
         return v
 
     @property
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property

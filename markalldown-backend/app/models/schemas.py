@@ -5,11 +5,9 @@ Jika ada perbedaan, spec menang.
 """
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel
-
 
 # ---------------------------------------------------------------------------
 # Error
@@ -39,7 +37,7 @@ class ConvertFileResponse(BaseModel):
     markdown: str
     size_bytes: int        # ukuran file asli (>= 1)
     converted_at: str      # ISO 8601 UTC
-    warnings: List[str] = []
+    warnings: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -48,14 +46,14 @@ class ConvertFileResponse(BaseModel):
 
 class BatchItem(BaseModel):
     filename: str
-    markdown: Optional[str] = None    # null jika status = error
+    markdown: str | None = None    # null jika status = error
     status: Literal["success", "error"]
-    error: Optional[str] = None       # ErrorCode, hanya saat error
-    message: Optional[str] = None     # pesan human-readable, hanya saat error
+    error: str | None = None       # ErrorCode, hanya saat error
+    message: str | None = None     # pesan human-readable, hanya saat error
 
 
 class ConvertFilesResponse(BaseModel):
-    results: List[BatchItem]
+    results: list[BatchItem]
     total: int
     success: int
     failed: int
