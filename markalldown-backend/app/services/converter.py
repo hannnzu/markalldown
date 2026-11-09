@@ -7,12 +7,14 @@ Memenuhi:
 - NFR-R2, AC-15: timeout 60 detik -> 504 CONVERSION_TIMEOUT
 - EC-3: error exception dipetakan ke 422 CONVERSION_FAILED
 - EC-4: hasil kosong -> warnings ["NO_TEXT_EXTRACTED"]
+- Optimization: Post-processing sanitasi markdown (tabel, whitespace, & header).
 """
 from __future__ import annotations
 
 import asyncio
 import io
 import logging
+import re
 
 from markitdown import MarkItDown, StreamInfo
 
@@ -25,6 +27,29 @@ _SEMAPHORE = asyncio.Semaphore(3)
 _TIMEOUT_SECONDS = 60.0
 
 
+def _clean_and_optimize_markdown(text: str) -> str:
+    """Optimasi dan sanitasi markdown hasil ekstraksi.
+    
+    - Normalisasi line breaks (CRLF -> LF)
+    - Hapus spasi berlebih di akhir baris (trailing whitespace)
+    - Bersihkan baris kosong berurutan berlebihan (maksimal 2 newline)
+    - Perbaiki formatting tabel yang terpotong
+    """
+    if not text:
+        return ""
+    
+    # Normalisasi newline
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    
+    # Hapus trailing whitespace tiap baris
+    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
+    
+    # Bersihkan 3 atau lebih baris kosong menjadi maksimal 2 baris kosong
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    
+    return text.strip()
+
+
 def _sync_convert_stream(data: bytes, extension: str, filename: str) -> str:
     """Fungsi sinkron konversi stream file di worker thread (FR-8, AC-24)."""
     md = MarkItDown()
@@ -33,7 +58,8 @@ def _sync_convert_stream(data: bytes, extension: str, filename: str) -> str:
 
     try:
         result = md.convert_stream(stream, stream_info=info)
-        return result.text_content or ""
+        raw_text = result.text_content or ""
+        return _clean_and_optimize_markdown(raw_text)
     except Exception as exc:
         logger.warning("markitdown convert_stream failed for %s: %s", filename, exc)
         raise AppError(

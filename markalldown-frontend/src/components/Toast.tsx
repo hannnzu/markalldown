@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState } from "react";
 
 export interface ToastMessage {
   id: string;
-  type: "error" | "warning" | "success";
+  type: "error" | "warning" | "success" | "info";
   text: string;
 }
 

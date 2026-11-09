@@ -4,9 +4,7 @@ import { useState, useCallback } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-// NFR-S7: rehype-raw TIDAK digunakan — mencegah XSS dari Markdown hasil konversi
-// D-8: react-markdown + remark-gfm tanpa rehype-raw
+import { Copy, Check, Download, FileText } from "lucide-react";
 
 const PREVIEW_TRUNCATE = 5 * 1024 * 1024; // 5 MB — EC-15
 
@@ -27,19 +25,44 @@ export default function SplitView({ markdown, filename }: SplitViewProps) {
     });
   }, [markdown]);
 
+  const downloadMd = useCallback(() => {
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const name = filename ? filename.replace(/\.[^/.]+$/, "") + ".md" : "converted.md";
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [markdown, filename]);
+
   return (
     <section className="split-view" aria-label={`Pratinjau: ${filename ?? "hasil konversi"}`}>
       <div className="split-view__toolbar">
-        <span className="split-view__filename">{filename ?? "Pratinjau"}</span>
-        <button className="btn btn--ghost btn--sm" onClick={copy}>
-          {copied ? "✓ Disalin" : "Salin Markdown"}
-        </button>
+        <div className="split-view__toolbar-left">
+          <FileText size={16} className="text-primary" />
+          <span className="split-view__filename">{filename ?? "Pratinjau Hasil"}</span>
+        </div>
+        <div className="split-view__toolbar-right">
+          <button className="btn btn--ghost btn--sm" onClick={downloadMd} title="Download file .md">
+            <Download size={14} />
+            <span>Unduh .md</span>
+          </button>
+          <button className="btn btn--secondary btn--sm" onClick={copy}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copied ? "Disalin" : "Salin Markdown"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* FR-19, FR-20, AC-27 — resizable split via react-resizable-panels v2 */}
       <PanelGroup direction="horizontal" className="split-view__panels">
         <Panel defaultSize={50} minSize={20} className="split-view__panel">
-          <div className="split-view__panel-header">Markdown mentah</div>
+          <div className="split-view__panel-header">
+            <span>Markdown mentah</span>
+            <span className="text-xs text-muted">{markdown.length} karakter</span>
+          </div>
           <pre className="split-view__raw">
             {previewText}
             {isTruncated && (
@@ -53,9 +76,11 @@ export default function SplitView({ markdown, filename }: SplitViewProps) {
         <PanelResizeHandle className="split-view__handle" aria-label="Ubah ukuran panel" />
 
         <Panel defaultSize={50} minSize={20} className="split-view__panel">
-          <div className="split-view__panel-header">Pratinjau render</div>
+          <div className="split-view__panel-header">
+            <span>Pratinjau render</span>
+            <span className="text-xs text-muted">HTML formatted</span>
+          </div>
           <article className="split-view__rendered markdown-body">
-            {/* AC-30: react-markdown tanpa rehype-raw mencegah injeksi HTML */}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {previewText}
             </ReactMarkdown>
