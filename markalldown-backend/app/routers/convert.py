@@ -19,8 +19,15 @@ from fastapi import APIRouter, File, Request, UploadFile
 from app.config import get_config
 from app.exceptions import AppError
 from app.limiter import limiter
-from app.models.schemas import BatchItem, ConvertFileResponse, ConvertFilesResponse
+from app.models.schemas import (
+    BatchItem,
+    ConvertFileResponse,
+    ConvertFilesResponse,
+    ConvertUrlRequest,
+    ConvertUrlResponse,
+)
 from app.services.converter import convert_file_data
+from app.services.url_fetcher import fetch_web_content, fetch_youtube_transcript, is_youtube_url
 from app.services.validators import read_and_validate_file_stream
 from app.utils.file_utils import sanitize_filename
 
@@ -168,4 +175,33 @@ async def convert_batch_files(
         total=len(results),
         success=success_count,
         failed=failed_count,
+    )
+
+
+@router.post("/url", response_model=ConvertUrlResponse)
+@limiter.limit("30/minute")
+async def convert_url(
+    request: Request,
+    payload: ConvertUrlRequest,
+) -> ConvertUrlResponse:
+    """AC-7, AC-8: Konversi URL web atau YouTube ke Markdown."""
+    raw_url = payload.url.strip()
+
+    if is_youtube_url(raw_url):
+        # Eksekusi transkrip YouTube (AC-8, EC-11, EC-12)
+        markdown = await asyncio.to_thread(fetch_youtube_transcript, raw_url)
+    else:
+        # Eksekusi fetch web biasa dengan SSRF protection (AC-7, AC-9, AC-10, EC-9, EC-10)
+        content, _ = await fetch_web_content(raw_url)
+        markdown, _ = await convert_file_data(
+            data=content,
+            extension=".html",
+            filename="webpage.html",
+        )
+
+    converted_at = datetime.now(UTC).isoformat()
+    return ConvertUrlResponse(
+        source_url=raw_url,
+        markdown=markdown,
+        converted_at=converted_at,
     )

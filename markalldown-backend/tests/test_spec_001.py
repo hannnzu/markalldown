@@ -10,8 +10,10 @@ Perintah:
 """
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
+import respx
 from fastapi.testclient import TestClient
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -439,34 +441,119 @@ class TestPhase4Batch:
 
 class TestPhase5Url:
 
+    @respx.mock
     def test_ac7_konversi_url_web_berhasil(self):
         """AC-7: Konversi URL web berhasil [FR-9, FR-11]"""
-        raise NotImplementedError("AC-7 — Phase 5")
+        from unittest.mock import patch
+
+        client = make_client()
+        target_url = "https://example.com"
+        html_content = "<html><body><h1>Example Domain</h1><p>This is a paragraph.</p></body></html>"
+
+        respx.get(target_url).respond(200, html=html_content)
+
+        # Mock DNS resolution to public IP
+        fake_addr = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+        with patch("socket.getaddrinfo", return_value=fake_addr):
+            resp = client.post("/api/convert/url", json={"url": target_url})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source_url"] == target_url
+        assert "Example Domain" in body["markdown"]
+        assert "converted_at" in body
 
     def test_ac8_konversi_youtube_berhasil(self):
         """AC-8: Konversi YouTube berhasil [FR-10]"""
-        raise NotImplementedError("AC-8 — Phase 5")
+        from unittest.mock import patch
+
+        client = make_client()
+        yt_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        fake_transcript = [
+            "Never gonna give you up",
+            "Never gonna let you down",
+        ]
+
+        with patch("app.services.url_fetcher.get_youtube_transcript_raw", return_value=fake_transcript):
+            resp = client.post("/api/convert/url", json={"url": yt_url})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source_url"] == yt_url
+        assert "Never gonna give you up" in body["markdown"]
 
     def test_ac9_url_internal_ditolak(self):
         """AC-9: URL internal ditolak [FR-12]"""
-        raise NotImplementedError("AC-9 — Phase 5")
+        client = make_client()
+        internal_urls = [
+            "http://127.0.0.1:8000/api/health",
+            "http://169.254.169.254/",
+            "http://10.0.0.5/",
+        ]
+        for u in internal_urls:
+            resp = client.post("/api/convert/url", json={"url": u})
+            assert resp.status_code == 400, f"Harus tolak {u}"
+            assert resp.json()["error"] == "URL_NOT_ALLOWED"
 
     def test_ac10_skema_selain_http_https_ditolak(self):
         """AC-10: Skema selain http/https ditolak [FR-11]"""
-        raise NotImplementedError("AC-10 — Phase 5")
+        client = make_client()
+        invalid_schemes = [
+            "file:///etc/passwd",
+            "ftp://example.com/a.txt",
+        ]
+        for u in invalid_schemes:
+            resp = client.post("/api/convert/url", json={"url": u})
+            assert resp.status_code == 400
+            assert resp.json()["error"] == "URL_NOT_ALLOWED"
 
     def test_ec9_url_tidak_bisa_dijangkau(self):
         """EC-9: URL unreachable → 502 URL_FETCH_FAILED"""
-        raise NotImplementedError("EC-9 — Phase 5")
+        from unittest.mock import patch
 
+        client = make_client()
+        with patch("socket.getaddrinfo", side_effect=socket.gaierror("Name resolution failed")):
+            resp = client.post("/api/convert/url", json={"url": "https://unreachable-domain-xyz.com"})
+
+        assert resp.status_code == 502
+        body = resp.json()
+        assert body["error"] == "URL_FETCH_FAILED"
+
+    @respx.mock
     def test_ec10_url_redirect_ke_alamat_privat(self):
         """EC-10: Redirect ke IP privat → URL_NOT_ALLOWED"""
-        raise NotImplementedError("EC-10 — Phase 5")
+        from unittest.mock import patch
+
+        client = make_client()
+        fake_addr = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+        respx.get("https://public-site.com").respond(302, headers={"location": "http://127.0.0.1/admin"})
+
+        with patch("socket.getaddrinfo", return_value=fake_addr):
+            resp = client.post("/api/convert/url", json={"url": "https://public-site.com"})
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "URL_NOT_ALLOWED"
 
     def test_ec11_video_youtube_tanpa_transkrip(self):
         """EC-11: YouTube tanpa transkrip → 422 TRANSCRIPT_UNAVAILABLE"""
-        raise NotImplementedError("EC-11 — Phase 5")
+        from unittest.mock import patch
+        from youtube_transcript_api import TranscriptsDisabled
+
+        client = make_client()
+        with patch("app.services.url_fetcher.get_youtube_transcript_raw", side_effect=TranscriptsDisabled("vid")):
+            resp = client.post("/api/convert/url", json={"url": "https://youtu.be/no_subtitles"})
+
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "TRANSCRIPT_UNAVAILABLE"
 
     def test_ec12_youtube_membatasi_laju(self):
         """EC-12: YouTube throttle → 503 UPSTREAM_THROTTLED"""
-        raise NotImplementedError("EC-12 — Phase 5")
+        from unittest.mock import patch
+        from youtube_transcript_api._errors import IpBlocked
+
+        client = make_client()
+        with patch("app.services.url_fetcher.get_youtube_transcript_raw", side_effect=IpBlocked("blocked")):
+            resp = client.post("/api/convert/url", json={"url": "https://www.youtube.com/watch?v=throttled_vid"})
+
+        assert resp.status_code == 503
+        assert resp.json()["error"] == "UPSTREAM_THROTTLED"
