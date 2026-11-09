@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install python dependencies
-COPY requirements.txt .
+# Install python dependencies from markalldown-backend directory
+COPY markalldown-backend/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy backend code
+COPY markalldown-backend/ .
 
 # Run as non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
